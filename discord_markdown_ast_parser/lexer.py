@@ -43,7 +43,7 @@ def lex(input_text):
     # markdown meaning.
     #
     # Problem is: We're generally only trying to match our regex pattern against the
-    # prefix of what we're looking at, so if we go through all of our rules and and up
+    # prefix of what we're looking at, so if we go through all of our rules and end up
     # noticing "Oh, that's just text", then we don't know how long that text segment
     # is going to be.
     #

@@ -1,51 +1,73 @@
 # Discord Markdown AST Parser
 #### Markdown Parser for Discord messages that creates an abstract syntax tree
 
-This package provides a parser that can be used to translate a Discord messages into an abstract syntax tree (AST) that represents how the message should be rendered according to Discord's markdown rules.
+This package provides a parser that can be used to translate a Discord message into an abstract syntax tree (AST) that represents how the message should be rendered according to Discord's markdown rules.
 
 ### Example
+Check the following example on how this parser will translate a Discord message:
+
+![image](https://user-images.githubusercontent.com/1405498/131235730-94ba8100-2b42-492f-9479-bbce80c592f0.png)
+
 ```python
 (
-        {'node_type': 'BOLD',
-         'children': (
-            {'node_type': 'TEXT', 'text_content': 'bold single'},
-        )},
-        
-        {'node_type': 'TEXT', 'text_content': '\n'},
-        
-        {'node_type': 'UNDERLINE',
-         'children': (
-            {'node_type': 'TEXT', 'text_content': 'underline single'},
-        )},
-        
-        {'node_type': 'TEXT', 'text_content': '\n'},
-        
-        {'node_type': 'STRIKETHROUGH',
-         'children': (
-            {'node_type': 'TEXT', 'text_content': 'strikethrough single'},
-        )},
-        
-        {'node_type': 'TEXT', 'text_content': '\n\n'},
-        
-        {'node_type': 'QUOTE_BLOCK',
-         'children': (
-            {'node_type': 'TEXT', 'text_content': 'quote\nblock\n'},
-        )},
-        
-        {'node_type': 'TEXT', 'text_content': '\n'},
-        
-        {'node_type': 'CODE_INLINE',
-         'children': (
-            {'node_type': 'TEXT', 'text_content': 'inline code'},
-        )},
-        
-        {'node_type': 'TEXT', 'text_content': '\n\n'},
-        
+    {'node_type': 'ITALIC',
+     'children': (
+      {'node_type': 'TEXT', 'text_content': 'italic star single'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n'},
+    
+    {'node_type': 'ITALIC',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'italic underscore single'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n'},
+    
+    {'node_type': 'BOLD',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'bold single'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n'},
+    
+    {'node_type': 'UNDERLINE',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'underline single'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n'},
+    
+    {'node_type': 'STRIKETHROUGH',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'strikethrough single'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n\n'},
+    
+    {'node_type': 'QUOTE_BLOCK',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'quote\nblock\n'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n'},
+    
+    {'node_type': 'CODE_INLINE',
+     'children': (
+        {'node_type': 'TEXT', 'text_content': 'inline code'},
+    )},
+    
+    {'node_type': 'TEXT', 'text_content': '\n\n'},
+    
+    {'node_type': 'QUOTE_BLOCK',
+     'children': (
         {'node_type': 'CODE_BLOCK',
          'code_lang': 'python',
          'children': (
-            {'node_type': 'TEXT', 'text_content': 'code\nblock\nwith\npython\nhighlighting\n'},
-        )}
+            {'node_type': 'TEXT', 
+             'text_content': 'code\nblock\nwith\npython\nhighlighting\n'},),
+        },
+    )},
 )
 ```
 
