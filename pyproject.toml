@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "discord_markdown_ast_parser"
+version = "1.0"
+description = "Markdown Parser for Discord messages that creates an abstract syntax tree"
+authors = ["Tim | w4rum <w4rum@khorne.faith>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.dev-dependencies]
+black = { version = "^21.5b1", extras = ["d"] }
+mypy = "^0.910"
+
+[tool.poetry.scripts]
+bot = "eav_bot.__main__:main"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
