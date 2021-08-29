@@ -1,26 +1,26 @@
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Optional, List, Generator
 
 
 class TokenType(Enum):
-    QUOTE_LINE_PREFIX = 0
-    USER_MENTION = 1
-    ROLE_MENTION = 2
-    CHANNEL_MENTION = 3
-    TEXT_INLINE = 4
-    CODE_INLINE_DELIMITER = 5
-    CODE_BLOCK_DELIMITER = 6
-    NEWLINE = 7
-    URL_WITH_PREVIEW = 8
-    URL_WITHOUT_PREVIEW = 9
-    STAR = 10
-    UNDERSCORE = 11
-    TILDE = 12
-    EMOJI_CUSTOM = 13
-    EMOJI_UNICODE_ENCODED = 14
-    SPOILER_DELIMITER = 15
+    TEXT_INLINE = 1
+    NEWLINE = 2
+    STAR = 3
+    UNDERSCORE = 4
+    TILDE = 5
+    SPOILER_DELIMITER = 6
+    USER_MENTION = 7
+    ROLE_MENTION = 8
+    CHANNEL_MENTION = 9
+    EMOJI_CUSTOM = 10
+    EMOJI_UNICODE_ENCODED = 11
+    URL_WITH_PREVIEW = 12
+    URL_WITHOUT_PREVIEW = 13
+    QUOTE_LINE_PREFIX = 14
+    CODE_INLINE_DELIMITER = 15
+    CODE_BLOCK_DELIMITER = 16
 
 
 @dataclass
@@ -36,7 +36,18 @@ class LexingRule:
     pattern: Optional[str] = None
 
 
-def lex(input_text: str) -> Tuple[Token, ...]:
+def lex(input_text: str) -> Generator[Token, None, None]:
+    """
+    Scans the input text for sequences of characters (=tokens), identified by regular
+    expressions, that have a special meaning in Discord's Markdown.
+
+    This function takes care of identifying the low-level elements of the text such as
+    markdown special characters. It also does pretty much all of the parsing work for
+    simple structures such as user mentions that can be identified via regular
+    expressions.
+
+    Will output the tokens in the order that they appear in the input text.
+    """
     # There will be cases when no specific lexing rules matches.
     #
     # This happens when what we're looking at is just simple text with no special

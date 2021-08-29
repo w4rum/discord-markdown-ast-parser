@@ -1,28 +1,28 @@
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Generator, Any, Tuple, List, Dict
+from typing import Optional, Generator, Any, List, Dict, Tuple, Iterable
 
 from discord_markdown_ast_parser.lexer import Token, TokenType
 
 
 class NodeType(Enum):
-    TEXT = 0
-    QUOTE_BLOCK = 1
-    CODE_BLOCK = 2
-    CODE_INLINE = 3
-    ITALIC = 4
-    BOLD = 5
-    UNDERLINE = 6
-    STRIKETHROUGH = 7
-    SPOILER = 8
-    USER = 9
-    ROLE = 10
-    CHANNEL = 11
-    EMOJI_CUSTOM = 12
-    EMOJI_UNICODE_ENCODED = 13
-    URL_WITH_PREVIEW = 14
-    URL_WITHOUT_PREVIEW = 15
+    TEXT = 1
+    ITALIC = 2
+    BOLD = 3
+    UNDERLINE = 4
+    STRIKETHROUGH = 5
+    SPOILER = 6
+    USER = 7
+    ROLE = 8
+    CHANNEL = 9
+    EMOJI_CUSTOM = 10
+    EMOJI_UNICODE_ENCODED = 11
+    URL_WITH_PREVIEW = 12
+    URL_WITHOUT_PREVIEW = 13
+    QUOTE_BLOCK = 14
+    CODE_BLOCK = 15
+    CODE_INLINE = 16
 
 
 @dataclass
@@ -39,7 +39,7 @@ class Node:
 
     # set on everything but TEXT type
     # some node types always have exactly one child
-    children: Optional[Tuple["Node", ...]] = None
+    children: Optional[List["Node"]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         # copy all properties that are not None
@@ -50,16 +50,27 @@ class Node:
 
         # recursively convert children to dict
         if self.children is not None:
-            self_dict["children"] = tuple([node.to_dict() for node in self.children])
+            self_dict["children"] = [node.to_dict() for node in self.children]
 
         return self_dict
 
 
-def parse_tokens(tokens: Tuple[Token, ...]) -> Tuple[Node, ...]:
-    return compress_text_nodes(tuple(parse_tokens_generator(tokens)))
+def parse_tokens(tokens: List[Token]) -> List[Node]:
+    """
+    This is a temporary workaround to combat a shortcoming of parse_tokens_generator.
+    The interesting code is in parse_tokens_generator. You will find a description of
+    this shortcoming in a comment at the end of parse_tokens_generator.
+    """
+    return merge_text_nodes(parse_tokens_generator(tokens))
 
 
-def compress_text_nodes(subtree: Tuple[Node, ...]) -> Tuple[Node, ...]:
+def merge_text_nodes(subtree: Iterable[Node]) -> List[Node]:
+    """
+    Recursively goes through a tree of nodes, merging neighbouring TEXT nodes.
+
+    Note that while this function returns an output list, it may change some Node
+    objects in the input. This function is only a temporary workaround anyway.
+    """
     compressed_tree = []
     prev_text_node = None
     for node in subtree:
@@ -73,22 +84,31 @@ def compress_text_nodes(subtree: Tuple[Node, ...]) -> Tuple[Node, ...]:
             prev_text_node = None
 
         if node.children is not None:
-            node.children = compress_text_nodes(node.children)
+            node.children = merge_text_nodes(node.children)
 
         compressed_tree.append(node)
 
-    return tuple(compressed_tree)
+    return compressed_tree
 
 
 def parse_tokens_generator(
-        tokens: Tuple[Token, ...], in_quote=False
+    tokens: List[Token], in_quote=False
 ) -> Generator[Node, None, None]:
+    """
+    Scans the lexed tokens and identifies more complex and possibly nested structures
+    such as code blocks, quote blocks and text modifiers that can't be identified using
+    regular expressions.
+
+    If the input token list has the same order as is produced by the lex function,
+    then this function will output the nodes in which they appear in the input text.
+    Keep in mind, however, that these nodes may have deeply nested children nodes which
+    won't appear on the root level.
+    """
     i = 0
     while i < len(tokens):
         current_token = tokens[i]
-        # print(i, current_token)
 
-        if current_token.token_type == TokenType.QUOTE_LINE_PREFIX:
+        if i > 40:
             print()
 
         # === simple node types without children
@@ -166,25 +186,24 @@ def parse_tokens_generator(
 
         # format: delimiter, type
         text_modifiers = [
-            ((TokenType.STAR, TokenType.STAR), NodeType.BOLD),
-            ((TokenType.UNDERSCORE, TokenType.UNDERSCORE), NodeType.UNDERLINE),
-            ((TokenType.TILDE, TokenType.TILDE), NodeType.STRIKETHROUGH),
-            ((TokenType.STAR,), NodeType.ITALIC),
-            ((TokenType.UNDERSCORE,), NodeType.ITALIC),
-            ((TokenType.SPOILER_DELIMITER,), NodeType.SPOILER),
-            ((TokenType.CODE_INLINE_DELIMITER,), NodeType.CODE_INLINE),
+            ([TokenType.STAR, TokenType.STAR], NodeType.BOLD),
+            ([TokenType.UNDERSCORE, TokenType.UNDERSCORE], NodeType.UNDERLINE),
+            ([TokenType.TILDE, TokenType.TILDE], NodeType.STRIKETHROUGH),
+            ([TokenType.STAR], NodeType.ITALIC),
+            ([TokenType.UNDERSCORE], NodeType.ITALIC),
+            ([TokenType.SPOILER_DELIMITER], NodeType.SPOILER),
+            ([TokenType.CODE_INLINE_DELIMITER], NodeType.CODE_INLINE),
         ]
 
-        parse_try = None
+        node, amount_consumed_tokens = None, None
         for delimiter, node_type in text_modifiers:
-            parse_try = try_parse_node_with_children(
+            node, amount_consumed_tokens = try_parse_node_with_children(
                 tokens[i:], delimiter, delimiter, node_type, in_quote
             )
-            if parse_try is not None:
+            if node is not None:
                 break
 
-        if parse_try is not None:
-            node, amount_consumed_tokens = parse_try
+        if node is not None:
             i += amount_consumed_tokens
             yield node
             continue
@@ -207,11 +226,10 @@ def parse_tokens_generator(
         #       and not <code-block><br />test<br /></code-block>
 
         if current_token.token_type == TokenType.CODE_BLOCK_DELIMITER:
-            search = search_for_closer(
-                tokens[i + 1:], (TokenType.CODE_BLOCK_DELIMITER,)
+            children_token, amount_consumed_tokens = search_for_closer(
+                tokens[i + 1 :], [TokenType.CODE_BLOCK_DELIMITER]
             )
-            if search is not None:
-                children_token, amount_consumed_tokens = search
+            if children_token is not None:
                 children_content = ""
                 # treat all children token as inline text
                 for child_token in children_token:
@@ -239,7 +257,7 @@ def parse_tokens_generator(
 
                 children_content = "\n".join(lines)
                 child_node = Node(NodeType.TEXT, text_content=children_content)
-                yield Node(NodeType.CODE_BLOCK, code_lang=lang, children=(child_node,))
+                yield Node(NodeType.CODE_BLOCK, code_lang=lang, children=[child_node])
                 i += 1 + amount_consumed_tokens
                 continue
 
@@ -256,28 +274,30 @@ def parse_tokens_generator(
         # note that in_quote won't change during the while-loop, we're just reducing
         # the level of indentation here by including it in the condition instead of
         # making an additional if statement around the while loop
-        while not in_quote and tokens[i].token_type == TokenType.QUOTE_LINE_PREFIX:
+        while (
+            not in_quote
+            and i < len(tokens)
+            and tokens[i].token_type == TokenType.QUOTE_LINE_PREFIX
+        ):
             # scan until next newline
             for j in range(i, len(tokens)):
                 if tokens[j].token_type == TokenType.NEWLINE:
                     # add everything from the quote line prefix (non-inclusive)
                     # to the newline (inclusive) as children token
-                    children_token_in_quote_block.extend(tokens[i + 1: j + 1])
+                    children_token_in_quote_block.extend(tokens[i + 1 : j + 1])
                     i = j + 1  # move to the token after the newline
                     break
             else:
                 # this is the last line,
                 # all remaining tokens are part of the quote block
-                children_token_in_quote_block.extend(tokens[i + 1:])
+                children_token_in_quote_block.extend(tokens[i + 1 :])
                 i = len(tokens)  # move to the end
                 break
 
         if len(children_token_in_quote_block) > 0:
             # tell the inner parse function that it's now inside a quote block
-            children_nodes = tuple(
-                parse_tokens_generator(
-                    tuple(children_token_in_quote_block), in_quote=True
-                )
+            children_nodes = list(
+                parse_tokens_generator(children_token_in_quote_block, in_quote=True)
             )
             yield Node(NodeType.QUOTE_BLOCK, children=children_nodes)
             continue
@@ -305,32 +325,48 @@ def parse_tokens_generator(
 
 
 def try_parse_node_with_children(
-        tokens: List[Token],
-        opener: Tuple[TokenType, ...],
-        closer: Tuple[TokenType, ...],
-        node_type: NodeType,
-        in_quote: bool,
-) -> Optional[Tuple[Node, int]]:
+    tokens: List[Token],
+    opener: List[TokenType],
+    closer: List[TokenType],
+    node_type: NodeType,
+    in_quote: bool,
+) -> Tuple[Optional[Node], Optional[int]]:
+    """
+    Tries identify a node at the start of the specified sequence of tokens by
+    checking for the opener and then searching for the closer.
+
+    Will create a Node with the specified NodeType if the opener and closer matched.
+    Will also call parse_tokens_generator on the child tokens, which means that the
+    Node returned by this function will be fully parsed.
+
+    Will relay the supplied in_quote to the parse_tokens_generator used to parse the
+    child tokens.
+
+    Returns the parsed Node and the total amount of tokens consumed, i.e., the amount
+    of child tokens plus the size of the opener and closer.
+    Returns None, None if the opener was not found at the beginning or closer was not
+    found anywhere in the token sequence.
+    """
     # if there aren't enough tokens to match this node type, abort immediately
     # +1 because there needs to be at least one child token
     if len(tokens) < len(opener) + 1 + len(closer):
-        return None
+        return None, None
 
     # check if the opener matches
     for opener_index in range(len(opener)):
         if tokens[opener_index].token_type != opener[opener_index]:
-            return None
+            return None, None
 
     # try finding the matching closer and consume as few tokens as possible
     # (skip the first token as that has to be a child token)
     # TODO: edge case ***bold and italic*** doesn't work
-    search = search_for_closer(tokens[len(opener) + 1:], closer)
+    children_token, amount_consumed_tokens = search_for_closer(
+        tokens[len(opener) + 1 :], closer
+    )
 
-    if search is None:
+    if children_token is None:
         # closer not found, abort trying to parse as the selected node type
-        return None
-
-    children_token, amount_consumed_tokens = search
+        return None, None
 
     # put first child token back in
     children_token = (tokens[len(opener)], *children_token)
@@ -339,15 +375,24 @@ def try_parse_node_with_children(
     return (
         Node(
             node_type,
-            children=tuple(parse_tokens_generator(children_token, in_quote)),
+            children=list(parse_tokens_generator(children_token, in_quote)),
         ),
         amount_consumed_tokens,
     )
 
 
 def search_for_closer(
-        tokens: List[Token], closer: Tuple[TokenType, ...]
-) -> Optional[Tuple[Tuple[Token, ...], int]]:
+    tokens: List[Token], closer: List[TokenType]
+) -> Tuple[Optional[List[Token]], Optional[int]]:
+    """
+    Searches for a specified closing sequence in the supplied list of tokens.
+
+    Returns a 2-tuple containing the tokens before the closing sequence starts and the
+    amount of tokens that are consumed by this match, i.e., the amount of tokens in the
+    first return value plus the length of the closing sequence.
+
+    Returns None, None if the closer was not found.
+    """
     # iterate over tokens
     for token_index in range(len(tokens) - len(closer) + 1):
         # try matching the closer to the current position by iterating over the closer
