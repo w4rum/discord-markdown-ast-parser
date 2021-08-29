@@ -1,10 +1,10 @@
-from typing import Any
+from typing import Any, Dict, Tuple
 
 from discord_markdown_ast_parser.lexer import lex
 from discord_markdown_ast_parser.parser import Node, parse_tokens
 
 
-def parse(text) -> tuple[Node, ...]:
+def parse(text) -> Tuple[Node, ...]:
     """
     Parses the text and returns an AST, using this package's internal Node
     representation.
@@ -14,7 +14,7 @@ def parse(text) -> tuple[Node, ...]:
     return parse_tokens(tokens)
 
 
-def parse_to_dict(text) -> tuple[dict[str, Any], ...]:
+def parse_to_dict(text) -> Tuple[Dict[str, Any], ...]:
     """
     Parses the text and returns an AST, represented as a dict.
     See the README for information on the structure of this dict.

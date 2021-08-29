@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Generator, Any
+from typing import Optional, Generator, Any, Tuple, List, Dict
 
 from discord_markdown_ast_parser.lexer import Token, TokenType
 
@@ -39,9 +39,9 @@ class Node:
 
     # set on everything but TEXT type
     # some node types always have exactly one child
-    children: Optional[tuple["Node", ...]] = None
+    children: Optional[Tuple["Node", ...]] = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         # copy all properties that are not None
         self_dict = {k: v for k, v in self.__dict__.items() if v is not None}
 
@@ -55,11 +55,11 @@ class Node:
         return self_dict
 
 
-def parse_tokens(tokens: tuple[Token, ...]) -> tuple[Node, ...]:
+def parse_tokens(tokens: Tuple[Token, ...]) -> Tuple[Node, ...]:
     return compress_text_nodes(tuple(parse_tokens_generator(tokens)))
 
 
-def compress_text_nodes(subtree: tuple[Node, ...]) -> tuple[Node, ...]:
+def compress_text_nodes(subtree: Tuple[Node, ...]) -> Tuple[Node, ...]:
     compressed_tree = []
     prev_text_node = None
     for node in subtree:
@@ -81,7 +81,7 @@ def compress_text_nodes(subtree: tuple[Node, ...]) -> tuple[Node, ...]:
 
 
 def parse_tokens_generator(
-        tokens: tuple[Token, ...], in_quote=False
+        tokens: Tuple[Token, ...], in_quote=False
 ) -> Generator[Node, None, None]:
     i = 0
     while i < len(tokens):
@@ -305,12 +305,12 @@ def parse_tokens_generator(
 
 
 def try_parse_node_with_children(
-        tokens: list[Token],
-        opener: tuple[TokenType, ...],
-        closer: tuple[TokenType, ...],
+        tokens: List[Token],
+        opener: Tuple[TokenType, ...],
+        closer: Tuple[TokenType, ...],
         node_type: NodeType,
         in_quote: bool,
-) -> Optional[tuple[Node, int]]:
+) -> Optional[Tuple[Node, int]]:
     # if there aren't enough tokens to match this node type, abort immediately
     # +1 because there needs to be at least one child token
     if len(tokens) < len(opener) + 1 + len(closer):
@@ -346,8 +346,8 @@ def try_parse_node_with_children(
 
 
 def search_for_closer(
-        tokens: list[Token], closer: tuple[TokenType, ...]
-) -> Optional[tuple[tuple[Token, ...], int]]:
+        tokens: List[Token], closer: Tuple[TokenType, ...]
+) -> Optional[Tuple[Tuple[Token, ...], int]]:
     # iterate over tokens
     for token_index in range(len(tokens) - len(closer) + 1):
         # try matching the closer to the current position by iterating over the closer

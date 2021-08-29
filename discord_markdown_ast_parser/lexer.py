@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class TokenType(Enum):
@@ -36,7 +36,7 @@ class LexingRule:
     pattern: Optional[str] = None
 
 
-def lex(input_text):
+def lex(input_text: str) -> Tuple[Token, ...]:
     # There will be cases when no specific lexing rules matches.
     #
     # This happens when what we're looking at is just simple text with no special
