@@ -152,7 +152,13 @@ with how it's rendered in the Discord client:
 - `*italic with whitespace before star closer *`
   will be detected as italic even though the Discord client won't.
   Note that Discord doesn't have this weird requirement for `_underscore italic_`.
-- ``||spoilers around `code segments`||``
+- ````
+  ||spoilers around
+  ```
+  code blocks
+  ```
+  ||
+  ````
   will be detected as spoilers spanning the code segments, although the Discord the
   client will only show spoiler bars before and after the code segment, but not on top
   of it.
