@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "discord_markdown_ast_parser"
-version = "1.0.5"
+version = "1.0.6"
 description = "Markdown Parser for Discord messages that creates an abstract syntax tree"
 authors = ["Tim Schmidt <w4rum@khorne.faith>"]
 readme = "README.md"

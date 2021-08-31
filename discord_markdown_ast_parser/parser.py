@@ -108,9 +108,6 @@ def parse_tokens_generator(
     while i < len(tokens):
         current_token = tokens[i]
 
-        if i > 40:
-            print()
-
         # === simple node types without children
         # just continue once any of them match
 
