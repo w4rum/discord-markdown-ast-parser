@@ -482,4 +482,4 @@ def search_for_closer(
         # closer didn't match, try next token_index
 
     # closer was not found
-    return None
+    return None, None
