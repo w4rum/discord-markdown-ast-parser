@@ -141,13 +141,13 @@ def parse_tokens_generator(
 
         # user mentions
         if LexingRule.USER_MENTION in current_token:
-            yield Node(NodeType.USER, id=int(current_token.groups[0]))
+            yield Node(NodeType.USER, id=int(current_token.groups[0]), content=current_token.value)
             i += 1
             continue
 
         # role mentions
         if LexingRule.ROLE_MENTION in current_token:
-            yield Node(NodeType.ROLE, id=int(current_token.groups[0]))
+            yield Node(NodeType.ROLE, id=int(current_token.groups[0]), content=current_token.value)
             i += 1
             continue
 
@@ -156,14 +156,15 @@ def parse_tokens_generator(
             yield Node(
                 NodeType.TIMESTAMP,
                 id=int(current_token.groups[0]),
-                content=current_token.groups[1],
+                code_lang=current_token.groups[1],
+                content=current_token.value,
             )
             i += 1
             continue
 
         # channel mentions
         if LexingRule.CHANNEL_MENTION in current_token:
-            yield Node(NodeType.CHANNEL, id=int(current_token.groups[0]))
+            yield Node(NodeType.CHANNEL, id=int(current_token.groups[0]), content=current_token.value)
             i += 1
             continue
 
@@ -171,8 +172,9 @@ def parse_tokens_generator(
         if LexingRule.SLASH_COMMAND_MENTION in current_token:
             yield Node(
                 NodeType.SLASH_COMMAND,
-                content=current_token.groups[0],
+                code_lang=current_token.groups[0],
                 id=int(current_token.groups[1]),
+                content=current_token.value,
             )
             i += 1
             continue
@@ -183,7 +185,8 @@ def parse_tokens_generator(
             yield Node(
                 NodeType.EMOJI_CUSTOM,
                 id=emoji_id,
-                content=current_token.groups[0],
+                content=current_token.value,
+                code_lang=current_token.groups[0],
                 url=f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
             )
             i += 1
@@ -195,7 +198,8 @@ def parse_tokens_generator(
             yield Node(
                 NodeType.EMOJI_CUSTOM_ANIMATED,
                 id=emoji_id,
-                content=current_token.groups[0],
+                code_lang=current_token.groups[0],
+                content=current_token.value,
                 url=f"https://cdn.discordapp.com/emojis/{emoji_id}.gif"
             )
             i += 1
@@ -217,32 +221,47 @@ def parse_tokens_generator(
         if LexingRule.EMOJI_UNICODE_ENCODED in current_token:
             yield Node(
                 NodeType.EMOJI_UNICODE_ENCODED,
-                content=current_token.groups[0],
+                content=current_token.value,
+                code_lang=current_token.groups[0],
             )
             i += 1
             continue
 
         # URL with preview embedded
         if LexingRule.URL_WITH_PREVIEW_EMBEDDED in current_token:
-            yield Node(NodeType.URL_WITH_PREVIEW_EMBEDDED, url=current_token.groups[1], content=current_token.groups[0])
+            yield Node(
+                NodeType.URL_WITH_PREVIEW_EMBEDDED,
+                url=current_token.groups[1],
+                code_lang=current_token.groups[0],
+                content=current_token.value,
+            )
             i += 1
             continue
 
         # URL without preview
         if LexingRule.URL_WITHOUT_PREVIEW_EMBEDDED in current_token:            
-            yield Node(NodeType.URL_WITHOUT_PREVIEW_EMBEDDED, url=current_token.groups[1], content=current_token.groups[0])
+            yield Node(
+                NodeType.URL_WITHOUT_PREVIEW_EMBEDDED,
+                url=current_token.groups[1],
+                code_lang=current_token.groups[0],
+                content=current_token.value,
+            )
             i += 1
             continue
         
         # URL with preview
         if LexingRule.URL_WITH_PREVIEW in current_token:
-            yield Node(NodeType.URL_WITH_PREVIEW, url=current_token.value)
+            yield Node(
+                NodeType.URL_WITH_PREVIEW,
+                url=current_token.value,
+                content=current_token.value,
+            )
             i += 1
             continue
 
         # URL without preview
         if LexingRule.URL_WITHOUT_PREVIEW in current_token:            
-            yield Node(NodeType.URL_WITHOUT_PREVIEW, url=current_token.value[1:-1])
+            yield Node(NodeType.URL_WITHOUT_PREVIEW, url=current_token.value[1:-1], content=current_token.value)
             i += 1
             continue
 
