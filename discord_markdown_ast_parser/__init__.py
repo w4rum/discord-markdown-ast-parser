@@ -1,10 +1,10 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Union
 
 from .lexer import lex, Lexing
 from .parser import Node, parse_tokens
 
 
-def lexing_list_convert(lexing: Lexing) -> List[Lexing]:
+def lexing_list_convert(lexing: Union[List[Lexing], Lexing]) -> List[Lexing]:
     if not isinstance(lexing, list):
         lexing = [lexing]
     return [Lexing(item) if isinstance(item, str) else item for item in lexing]
