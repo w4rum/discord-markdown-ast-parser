@@ -4,7 +4,7 @@ from enum import Enum
 import itertools
 from typing import Optional, Generator, Any, List, Dict, Tuple, Iterable
 
-from lexer import Token, LexingRule, Lexing
+from .lexer import Token, LexingRule, Lexing
 
 
 NodeType = Enum(

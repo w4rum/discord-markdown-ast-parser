@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
-from lexer import lex, Lexing
-from parser import Node, parse_tokens
+from .lexer import lex, Lexing
+from .parser import Node, parse_tokens
 
 
 def lexing_list_convert(lexing: Lexing) -> List[Lexing]:
