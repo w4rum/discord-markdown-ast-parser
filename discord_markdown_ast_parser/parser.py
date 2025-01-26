@@ -1,67 +1,90 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+import itertools
 from typing import Optional, Generator, Any, List, Dict, Tuple, Iterable
 
-from discord_markdown_ast_parser.lexer import Token, TokenType
+from .lexer import Token, LexingRule, Lexing
 
 
-class NodeType(Enum):
-    TEXT = 1
-    ITALIC = 2
-    BOLD = 3
-    UNDERLINE = 4
-    STRIKETHROUGH = 5
-    SPOILER = 6
-    USER = 7
-    ROLE = 8
-    CHANNEL = 9
-    EMOJI_CUSTOM = 10
-    EMOJI_UNICODE_ENCODED = 11
-    URL_WITH_PREVIEW = 12
-    URL_WITHOUT_PREVIEW = 13
-    QUOTE_BLOCK = 14
-    CODE_BLOCK = 15
-    CODE_INLINE = 16
+NodeType = Enum(
+    "NodeType",
+    [
+        "TEXT",
+        "ITALIC",
+        "BOLD",
+        "UNDERLINE",
+        "STRIKETHROUGH",
+        "SPOILER",
+        "USER",
+        "ROLE",
+        "CHANNEL",
+        "SLASH_COMMAND",
+        "EMOJI_CUSTOM",
+        "EMOJI_CUSTOM_ANIMATED",
+        "EMOJI_UNICODE",
+        "EMOJI_UNICODE_ENCODED",
+        "URL_WITH_PREVIEW_EMBEDDED",
+        "URL_WITHOUT_PREVIEW_EMBEDDED",
+        "URL_WITH_PREVIEW",
+        "URL_WITHOUT_PREVIEW",
+        "TIMESTAMP",
+        "QUOTE_BLOCK",
+        "CODE_BLOCK",
+        "CODE_INLINE",
+        "CUSTOM",
+    ],
+    start=1,
+)
+
+# format: delimiter, type
+DEFAULT_MODIFIERS = [
+    ([[LexingRule.STAR, LexingRule.STAR]], NodeType.BOLD),
+    ([[LexingRule.UNDERSCORE, LexingRule.UNDERSCORE]], NodeType.UNDERLINE),
+    ([[LexingRule.TILDE, LexingRule.TILDE]], NodeType.STRIKETHROUGH),
+    ([[LexingRule.STAR]], NodeType.ITALIC),
+    ([[LexingRule.UNDERSCORE]], NodeType.ITALIC),
+    ([[LexingRule.SPOILER_DELIMITER]], NodeType.SPOILER),
+    ([[LexingRule.CODE_INLINE_DELIMITER]], NodeType.CODE_INLINE),
+]
+LANG_SPEC = re.compile(r"([a-zA-Z0-9-]*)(.*)")
 
 
 @dataclass
 class Node:
-    node_type: NodeType
-
-    # only set on TEXT type
-    text_content: Optional[str] = None
-
-    discord_id: Optional[int] = None
-    emoji_name: Optional[str] = None
+    node_type: NodeType = NodeType.TEXT
+    content: Optional[str] = None
+    id: Optional[int] = None
     code_lang: Optional[str] = None
     url: Optional[str] = None
+    children: List["Node"] = field(default_factory=list)
 
-    # set on everything but TEXT type
-    # some node types always have exactly one child
-    children: Optional[List["Node"]] = None
+    def __post_init__(self):
+        self.children = self.children or []
 
     def to_dict(self) -> Dict[str, Any]:
         # copy all properties that are not None
         self_dict = {k: v for k, v in self.__dict__.items() if v is not None}
 
         # convert NodeType to string
-        self_dict["node_type"] = self.node_type.name
+        self_dict["node_type"] = self.node_type if isinstance(self.node_type, str) else self.node_type.name
 
         # recursively convert children to dict
-        if self.children is not None:
+        if self.children:
             self_dict["children"] = [node.to_dict() for node in self.children]
 
         return self_dict
 
 
-def parse_tokens(tokens: List[Token]) -> List[Node]:
+def parse_tokens(
+    tokens: List[Token], custom: Dict[str, List[Lexing]] = None
+) -> List[Node]:
     """
     This is a temporary workaround to combat a shortcoming of parse_tokens_generator.
     The interesting code is in parse_tokens_generator. You will find a description of
     this shortcoming in a comment at the end of parse_tokens_generator.
     """
-    return merge_text_nodes(parse_tokens_generator(tokens))
+    return merge_text_nodes(parse_tokens_generator(tokens, custom=custom))
 
 
 def merge_text_nodes(subtree: Iterable[Node]) -> List[Node]:
@@ -78,12 +101,12 @@ def merge_text_nodes(subtree: Iterable[Node]) -> List[Node]:
             if prev_text_node is None:
                 prev_text_node = node
             else:
-                prev_text_node.text_content += node.text_content
+                prev_text_node.content += node.content
                 continue  # don't store this node
         else:
             prev_text_node = None
 
-        if node.children is not None:
+        if node.children:
             node.children = merge_text_nodes(node.children)
 
         compressed_tree.append(node)
@@ -92,7 +115,7 @@ def merge_text_nodes(subtree: Iterable[Node]) -> List[Node]:
 
 
 def parse_tokens_generator(
-    tokens: List[Token], in_quote=False
+    tokens: List[Token], in_quote: bool = False, custom: Dict[str, List[Lexing]] = None,
 ) -> Generator[Node, None, None]:
     """
     Scans the lexed tokens and identifies more complex and possibly nested structures
@@ -104,6 +127,7 @@ def parse_tokens_generator(
     Keep in mind, however, that these nodes may have deeply nested children nodes which
     won't appear on the root level.
     """
+    custom = custom if custom is not None else {}
     i = 0
     while i < len(tokens):
         current_token = tokens[i]
@@ -112,57 +136,134 @@ def parse_tokens_generator(
         # just continue once any of them match
 
         # text
-        if current_token.token_type == TokenType.TEXT_INLINE:
-            yield Node(NodeType.TEXT, text_content=current_token.value)
+        if LexingRule.TEXT_INLINE in current_token:
+            yield Node(NodeType.TEXT, content=current_token.value)
             i += 1
             continue
 
         # user mentions
-        if current_token.token_type == TokenType.USER_MENTION:
-            yield Node(NodeType.USER, discord_id=int(current_token.groups[0]))
+        if LexingRule.USER_MENTION in current_token:
+            yield Node(NodeType.USER, id=int(current_token.groups[0]), content=current_token.value)
             i += 1
             continue
 
         # role mentions
-        if current_token.token_type == TokenType.ROLE_MENTION:
-            yield Node(NodeType.ROLE, discord_id=int(current_token.groups[0]))
+        if LexingRule.ROLE_MENTION in current_token:
+            yield Node(NodeType.ROLE, id=int(current_token.groups[0]), content=current_token.value)
+            i += 1
+            continue
+
+        # unix timestamps
+        if LexingRule.TIMESTAMP in current_token:
+            yield Node(
+                NodeType.TIMESTAMP,
+                id=int(current_token.groups[0]),
+                code_lang=current_token.groups[1],
+                content=current_token.value,
+            )
             i += 1
             continue
 
         # channel mentions
-        if current_token.token_type == TokenType.CHANNEL_MENTION:
-            yield Node(NodeType.CHANNEL, discord_id=int(current_token.groups[0]))
+        if LexingRule.CHANNEL_MENTION in current_token:
+            yield Node(NodeType.CHANNEL, id=int(current_token.groups[0]), content=current_token.value)
+            i += 1
+            continue
+
+        # slash commands
+        if LexingRule.SLASH_COMMAND_MENTION in current_token:
+            yield Node(
+                NodeType.SLASH_COMMAND,
+                code_lang=current_token.groups[0],
+                id=int(current_token.groups[1]),
+                content=current_token.value,
+            )
             i += 1
             continue
 
         # custom emoji
-        if current_token.token_type == TokenType.EMOJI_CUSTOM:
+        if LexingRule.EMOJI_CUSTOM in current_token:
+            emoji_id = int(current_token.groups[1])
             yield Node(
                 NodeType.EMOJI_CUSTOM,
-                discord_id=int(current_token.groups[1]),
-                emoji_name=current_token.groups[0],
+                id=emoji_id,
+                content=current_token.value,
+                code_lang=current_token.groups[0],
+                url=f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
+            )
+            i += 1
+            continue
+
+        # custom animated emoji
+        if LexingRule.EMOJI_CUSTOM_ANIMATED in current_token:
+            emoji_id = int(current_token.groups[1])
+            yield Node(
+                NodeType.EMOJI_CUSTOM_ANIMATED,
+                id=emoji_id,
+                code_lang=current_token.groups[0],
+                content=current_token.value,
+                url=f"https://cdn.discordapp.com/emojis/{emoji_id}.gif"
+            )
+            i += 1
+            continue
+
+        # unicode emoji (when it's written as unicode)
+        if LexingRule.EMOJI_UNICODE in current_token:
+            emoji = current_token.groups[0][0]
+            yield Node(
+                NodeType.EMOJI_UNICODE,
+                content=emoji,
+                id=ord(emoji),
+                url=f"https://emoji.fileformat.info/png/{ord(emoji):x}.png"
             )
             i += 1
             continue
 
         # unicode emoji (when it's encoded as :name: and not just written as unicode)
-        if current_token.token_type == TokenType.EMOJI_UNICODE_ENCODED:
+        if LexingRule.EMOJI_UNICODE_ENCODED in current_token:
             yield Node(
                 NodeType.EMOJI_UNICODE_ENCODED,
-                emoji_name=current_token.groups[0],
+                content=current_token.value,
+                code_lang=current_token.groups[0],
             )
             i += 1
             continue
 
-        # URL with preview
-        if current_token.token_type == TokenType.URL_WITH_PREVIEW:
-            yield Node(NodeType.URL_WITH_PREVIEW, url=current_token.value)
+        # URL with preview embedded
+        if LexingRule.URL_WITH_PREVIEW_EMBEDDED in current_token:
+            yield Node(
+                NodeType.URL_WITH_PREVIEW_EMBEDDED,
+                url=current_token.groups[1],
+                code_lang=current_token.groups[0],
+                content=current_token.value,
+            )
             i += 1
             continue
 
         # URL without preview
-        if current_token.token_type == TokenType.URL_WITHOUT_PREVIEW:
-            yield Node(NodeType.URL_WITHOUT_PREVIEW, url=current_token.value[1:-1])
+        if LexingRule.URL_WITHOUT_PREVIEW_EMBEDDED in current_token:            
+            yield Node(
+                NodeType.URL_WITHOUT_PREVIEW_EMBEDDED,
+                url=current_token.groups[1],
+                code_lang=current_token.groups[0],
+                content=current_token.value,
+            )
+            i += 1
+            continue
+        
+        # URL with preview
+        if LexingRule.URL_WITH_PREVIEW in current_token:
+            yield Node(
+                NodeType.URL_WITH_PREVIEW,
+                url=current_token.value,
+                content=current_token.value,
+            )
+            i += 1
+            continue
+
+        # URL without preview
+        if LexingRule.URL_WITHOUT_PREVIEW in current_token:            
+            yield Node(NodeType.URL_WITHOUT_PREVIEW, url=current_token.value[1:-1], content=current_token.value)
             i += 1
             continue
 
@@ -181,21 +282,11 @@ def parse_tokens_generator(
         # known issue:
         # we don't account for the fact that spoilers can't wrap code blocks
 
-        # format: delimiter, type
-        text_modifiers = [
-            ([TokenType.STAR, TokenType.STAR], NodeType.BOLD),
-            ([TokenType.UNDERSCORE, TokenType.UNDERSCORE], NodeType.UNDERLINE),
-            ([TokenType.TILDE, TokenType.TILDE], NodeType.STRIKETHROUGH),
-            ([TokenType.STAR], NodeType.ITALIC),
-            ([TokenType.UNDERSCORE], NodeType.ITALIC),
-            ([TokenType.SPOILER_DELIMITER], NodeType.SPOILER),
-            ([TokenType.CODE_INLINE_DELIMITER], NodeType.CODE_INLINE),
-        ]
-
+        text_modifiers = [([[v[0]], [v[-1]]], k) for k, v in custom.items() if k and v]
         node, amount_consumed_tokens = None, None
-        for delimiter, node_type in text_modifiers:
+        for delimiter, node_type in itertools.chain(text_modifiers, DEFAULT_MODIFIERS):
             node, amount_consumed_tokens = try_parse_node_with_children(
-                tokens[i:], delimiter, delimiter, node_type, in_quote
+                tokens[i:], delimiter[0], delimiter[-1], node_type, in_quote, custom=custom
             )
             if node is not None:
                 break
@@ -222,9 +313,9 @@ def parse_tokens_generator(
         #       is, in HTML, <code-block>test<br /></code-block>
         #       and not <code-block><br />test<br /></code-block>
 
-        if current_token.token_type == TokenType.CODE_BLOCK_DELIMITER:
+        if LexingRule.CODE_BLOCK_DELIMITER in current_token:
             children_token, amount_consumed_tokens = search_for_closer(
-                tokens[i + 1 :], [TokenType.CODE_BLOCK_DELIMITER]
+                tokens[i + 1 :], [current_token.lexing_rule]
             )
             if children_token is not None:
                 children_content = ""
@@ -243,7 +334,7 @@ def parse_tokens_generator(
                         non_empty_line_found = True
                         break
                 if non_empty_line_found:
-                    match = re.fullmatch(r"([a-zA-Z0-9-]*)(.*)", lines[0])
+                    match = LANG_SPEC.fullmatch(lines[0])
                     # if there is any behind the lang spec, then it is normal text
                     # otherwise, it is either a lang spec (gets removed from the
                     # displayed text) or it is empty (newline gets removed)
@@ -253,8 +344,9 @@ def parse_tokens_generator(
                             lang = match[1]
 
                 children_content = "\n".join(lines)
-                child_node = Node(NodeType.TEXT, text_content=children_content)
-                yield Node(NodeType.CODE_BLOCK, code_lang=lang, children=[child_node])
+                yield Node(
+                    NodeType.CODE_BLOCK, code_lang=lang, content=children_content
+                )
                 i += 1 + amount_consumed_tokens
                 continue
 
@@ -267,6 +359,7 @@ def parse_tokens_generator(
         # - quote blocks can't be nested. any quote delimiters inside a quote block
         #   are just inline text. all other elements can appear inside a quote block
         # - text modifiers
+
         children_token_in_quote_block = []
         # note that in_quote won't change during the while-loop, we're just reducing
         # the level of indentation here by including it in the condition instead of
@@ -274,11 +367,11 @@ def parse_tokens_generator(
         while (
             not in_quote
             and i < len(tokens)
-            and tokens[i].token_type == TokenType.QUOTE_LINE_PREFIX
+            and LexingRule.QUOTE_LINE_PREFIX in tokens[i]
         ):
             # scan until next newline
             for j in range(i, len(tokens)):
-                if tokens[j].token_type == TokenType.NEWLINE:
+                if LexingRule.NEWLINE in tokens[j]:
                     # add everything from the quote line prefix (non-inclusive)
                     # to the newline (inclusive) as children token
                     children_token_in_quote_block.extend(tokens[i + 1 : j + 1])
@@ -294,9 +387,12 @@ def parse_tokens_generator(
         if len(children_token_in_quote_block) > 0:
             # tell the inner parse function that it's now inside a quote block
             children_nodes = list(
-                parse_tokens_generator(children_token_in_quote_block, in_quote=True)
+                parse_tokens_generator(
+                    children_token_in_quote_block, in_quote=True, custom=custom
+                )
             )
-            yield Node(NodeType.QUOTE_BLOCK, children=children_nodes)
+            content = "".join([token.value for token in children_token_in_quote_block])
+            yield Node(NodeType.QUOTE_BLOCK, children=children_nodes, content=content)
             continue
 
         # if we get all the way here, than whatever token we're currently sitting on
@@ -323,10 +419,11 @@ def parse_tokens_generator(
 
 def try_parse_node_with_children(
     tokens: List[Token],
-    opener: List[TokenType],
-    closer: List[TokenType],
+    opener: List[LexingRule],
+    closer: List[LexingRule],
     node_type: NodeType,
     in_quote: bool,
+    custom: Optional[Dict[str, List[str]]] = None,
 ) -> Tuple[Optional[Node], Optional[int]]:
     """
     Tries identify a node at the start of the specified sequence of tokens by
@@ -351,12 +448,13 @@ def try_parse_node_with_children(
 
     # check if the opener matches
     for opener_index in range(len(opener)):
-        if tokens[opener_index].token_type != opener[opener_index]:
+        if opener[opener_index] not in tokens[opener_index]:
             return None, None
 
     # try finding the matching closer and consume as few tokens as possible
     # (skip the first token as that has to be a child token)
     # TODO: edge case ***bold and italic*** doesn't work
+    
     children_token, amount_consumed_tokens = search_for_closer(
         tokens[len(opener) + 1 :], closer
     )
@@ -372,14 +470,17 @@ def try_parse_node_with_children(
     return (
         Node(
             node_type,
-            children=list(parse_tokens_generator(children_token, in_quote)),
+            children=list(
+                parse_tokens_generator(children_token, in_quote, custom=custom)
+            ),
+            content="".join(token.value for token in children_token),
         ),
         amount_consumed_tokens,
     )
 
 
 def search_for_closer(
-    tokens: List[Token], closer: List[TokenType]
+    tokens: List[Token], closer: List[Lexing]
 ) -> Tuple[Optional[List[Token]], Optional[int]]:
     """
     Searches for a specified closing sequence in the supplied list of tokens.
@@ -394,7 +495,7 @@ def search_for_closer(
     for token_index in range(len(tokens) - len(closer) + 1):
         # try matching the closer to the current position by iterating over the closer
         for closer_index in range(len(closer)):
-            if tokens[token_index + closer_index].token_type != closer[closer_index]:
+            if closer[closer_index] not in tokens[token_index + closer_index]:
                 break
         else:
             # closer matched
@@ -402,4 +503,4 @@ def search_for_closer(
         # closer didn't match, try next token_index
 
     # closer was not found
-    return None
+    return None, None

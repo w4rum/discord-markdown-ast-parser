@@ -9,66 +9,39 @@ Check the following example on how this parser will translate a Discord message:
 ![image](https://user-images.githubusercontent.com/1405498/131235730-94ba8100-2b42-492f-9479-bbce80c592f0.png)
 
 ```python
-(
-    {'node_type': 'ITALIC',
-     'children': (
-      {'node_type': 'TEXT', 'text_content': 'italic star single'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n'},
-    
-    {'node_type': 'ITALIC',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'italic underscore single'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n'},
-    
-    {'node_type': 'BOLD',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'bold single'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n'},
-    
-    {'node_type': 'UNDERLINE',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'underline single'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n'},
-    
-    {'node_type': 'STRIKETHROUGH',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'strikethrough single'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n\n'},
-    
-    {'node_type': 'QUOTE_BLOCK',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'quote\nblock\n'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n'},
-    
-    {'node_type': 'CODE_INLINE',
-     'children': (
-        {'node_type': 'TEXT', 'text_content': 'inline code'},
-    )},
-    
-    {'node_type': 'TEXT', 'text_content': '\n\n'},
-    
-    {'node_type': 'QUOTE_BLOCK',
-     'children': (
-        {'node_type': 'CODE_BLOCK',
-         'code_lang': 'python',
-         'children': (
-            {'node_type': 'TEXT', 
-             'text_content': 'code\nblock\nwith\npython\nhighlighting\n'},),
-        },
-    )},
-)
+[
+  {'node_type': 'ITALIC', 'content': 'italic star single', 'children': [
+    {'node_type': 'TEXT', 'content': 'italic star single', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n', 'children': []},
+  {'node_type': 'ITALIC', 'content': 'italic underscore single', 'children': [
+    {'node_type': 'TEXT', 'content': 'italic underscore single', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n', 'children': []},
+  {'node_type': 'BOLD', 'content': 'bold single', 'children': [
+    {'node_type': 'TEXT', 'content': 'bold single', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n', 'children': []},
+  {'node_type': 'UNDERLINE', 'content': 'underline single', 'children': [
+    {'node_type': 'TEXT', 'content': 'underline single', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n', 'children': []},
+  {'node_type': 'STRIKETHROUGH', 'content': 'strikethrough single', 'children': [
+    {'node_type': 'TEXT', 'content': 'strikethrough single', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n\n', 'children': []},
+  {'node_type': 'QUOTE_BLOCK', 'content': 'quote\nblock\n', 'children': [
+    {'node_type': 'TEXT', 'content': 'quote\nblock\n', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n', 'children': []},
+  {'node_type': 'CODE_INLINE', 'content': 'inline code', 'children': [
+    {'node_type': 'TEXT', 'content': 'inline code', 'children': []}
+  ]},
+  {'node_type': 'TEXT', 'content': '\n\n', 'children': []},
+  {'node_type': 'QUOTE_BLOCK', 'content': '```py\ncode\nblock\nwith\npython\nhighlighting\n```', 'children': [
+    {'node_type': 'CODE_BLOCK', 'content': 'code\nblock\nwith\npython\nhighlighting\n', 'code_lang': 'py', 'children': []}
+  ]}
+]
 ```
 
 ### Installation
@@ -91,49 +64,81 @@ ast_tuple_of_nodes = parse(message_content)
 These are the types of nodes the parser will output:
 ```
 TEXT
-- fields: "text_content"
+- fields: "content"
 - Just standard text, no additional formatting
 - No child nodes
 
 ITALIC, BOLD, UNDERLINE, STRIKETHROUGH, SPOILER, CODE_INLINE
-- fields: "children"
+- fields: "children" "content"
 - self-explanatory
 
 QUOTE_BLOCK
-- fields: "children"
+- fields: "children" "content"
 - represents a single, uninterrupted code block (no gaps in Discord's client)
 - can not contain another quote block (Discord has no nested quotes)
 
 CODE_BLOCK
-- fields: "children", "code_lang"
-- can only contain a single TEXT node, all other markdown syntax inside the code block
-  is ignored
+- fields: "code_lang" "content"
 - may or may not have a language specifier
 - first newline is stripped according to the same rules that the Discord client uses
 
 USER, ROLE, CHANNEL
-- fields: "discord_id"
+- fields: "id"
 - user, role, or channel mention
 - there is no way to retrieve the user/role/channel name, color or channel type
   (text/voice/stage) from just the message, so you'll have to use the API
   (or discord.py) to query that
 
-URL_WITH_PREVIEW, URL_WITHOUT_PREVIEW
-- fields: "url"
+URL_WITH_PREVIEW, URL_WITHOUT_PREVIEW URL_WITH_PREVIEW_EMBEDDED URL_WITHOUT_PREVIEW_EMBEDDED
+- fields: "url" "content"
 - a HTTP URL
 - this is only recognized if the link actually contains "http". this is the same for the
   Discord client, with the exception that the Discord client also scan for invite links
   that don't start with http, e.g., "discord.gg/pxa"
 - the WITHOUT_PREVIEW variant appears when the message contains the URL in the <URL>
   form, which causes the Discord client to suppress the preview
+- content is provided for the URL_WITH_PREVIEW_EMBEDDED and URL_WITHOUT_PREVIEW_EMBEDDED variants
   
-EMOJI_CUSTOM
-- fields: "emoji_name", "emoji_id"
+EMOJI_CUSTOM, EMOJI_CUSTOM_ANIMATED
+- fields: "content", "id" "url"
+- URLs are returned in the following way
+  https://cdn.discordapp.com/emojis/EMOJI_ID.png
+  https://cdn.discordapp.com/emojis/EMOJI_ID.gif
+
+  
+EMOJI_UNICODE
+- fields: "content" "url"
+- unicode emoji, e.g., 🚗
+- URLs are returned in the following way
+  https://emoji.fileformat.info/png/1f697.png
+
+EMOJI_UNICODE_ENCODED
+- fields: "content"
+- unicode emojis that are encoded using the Discord client's emoji encoding method
+- this will appear very rarely. unicode emojis are usually just posted as unicode
+  characters and thus end up in a TEXT node
+
+EMOJI_CUSTOM_ENCODED, EMOJI_CUSTOM_ANIMATED_ENCODED
+- fields: "content", "id"
+- custom emojis that are encoded using the Discord client's emoji encoding method
 - you can get the custom emoji's image by querying to
   https://cdn.discordapp.com/emojis/EMOJI_ID.png
-  
+
+EMOJI_CUSTOM_NAME, EMOJI_CUSTOM_ANIMATED_NAME
+- fields: "content", "name"
+- custom emojis that are posted using their name, e.g., :red_car:
+- you can get the custom emoji's image by querying to
+  https://cdn.discordapp.com/emojis/EMOJI_ID.png
+
+EMOJI_CUSTOM_NAME_ENCODED, EMOJI_CUSTOM_ANIMATED_NAME_ENCODED
+- fields: "content", "name"
+- custom emojis that are posted using their name and encoded using the Discord client's
+  emoji encoding method, e.g., <:red_car:123456789123456789>
+- you can get the custom emoji's image by querying to
+  https://cdn.discordapp.com/emojis/EMOJI_ID.png
+
 EMOJI_UNICODE_ENCODED
-- fields: "emoji_name"
+- fields: "content"
 - this will appear very rarely. unicode emojis are usually just posted as unicode  
   characters and thus end up in a TEXT node it is, however, possible to send a message
   from a bot that uses, e.g., :red_car: instead of the actual red_car unicode emoji.
@@ -149,9 +154,6 @@ with how it's rendered in the Discord client:
 - `***bold and italic***` will be detected as bold-only with extra stars.
   This only happens when the italic and bold stars are right next to each other.
   This does not happen when mixing bold stars with italic underscores.
-- `*italic with whitespace before star closer *`
-  will be detected as italic even though the Discord client won't.
-  Note that Discord doesn't have this weird requirement for `_underscore italic_`.
 - ````
   ||spoilers around
   ```
@@ -162,4 +164,7 @@ with how it's rendered in the Discord client:
   will be detected as spoilers spanning the code segments, although the Discord the
   client will only show spoiler bars before and after the code segment, but not on top
   of it.
-  
+- Custom parsers are experimental, tends to work for different pair of values.  
+- The URL matching scheme of Discord is quite complex and not fully understood, so there
+  might be some edge cases where the parser doesn't recognize a URL that the Discord
+  client does, and vice versa.
